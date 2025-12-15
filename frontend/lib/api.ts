@@ -43,3 +43,49 @@ export async function compareModels(
   }
 }
 
+export interface OpenAIConfig {
+  has_key: boolean;
+}
+
+export async function getOpenAIConfig(): Promise<OpenAIConfig> {
+  const response = await fetch(`${API_BASE_URL}/config/openai`, {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+    },
+  });
+  return handleResponse<OpenAIConfig>(response);
+}
+
+export async function updateOpenAIKey(apiKey: string): Promise<OpenAIConfig> {
+  const response = await fetch(`${API_BASE_URL}/config/openai`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ api_key: apiKey }),
+  });
+  return handleResponse<OpenAIConfig>(response);
+}
+
+export async function getGeminiConfig(): Promise<OpenAIConfig> {
+  const response = await fetch(`${API_BASE_URL}/config/gemini`, {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+    },
+  });
+  return handleResponse<OpenAIConfig>(response);
+}
+
+export async function updateGeminiKey(apiKey: string): Promise<OpenAIConfig> {
+  const response = await fetch(`${API_BASE_URL}/config/gemini`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ api_key: apiKey }),
+  });
+  return handleResponse<OpenAIConfig>(response);
+}
+

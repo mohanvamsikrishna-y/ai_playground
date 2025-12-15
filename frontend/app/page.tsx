@@ -5,6 +5,7 @@ import Header from "@/components/Header";
 import PromptInput from "@/components/PromptInput";
 import ModelSelector from "@/components/ModelSelector";
 import CompareResults from "@/components/CompareResults";
+import OpenAISettings from "@/components/OpenAISettings";
 import { getModels, compareModels } from "@/lib/api";
 import type { ModelInfo, ModelResponse } from "@/lib/types";
 
@@ -16,20 +17,36 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const refetchModels = async () => {
+    try {
+      const fetchedModels = await getModels();
+      setModels(fetchedModels);
+      // Preserve selection when possible; otherwise default to first model.
+      if (fetchedModels.length === 0) {
+        setSelectedModels([]);
+        return;
+      }
+      if (selectedModels.length === 0) {
+        setSelectedModels([fetchedModels[0].id]);
+        return;
+      }
+      const availableIds = new Set(fetchedModels.map((m) => m.id));
+      const stillValid = selectedModels.filter((id) => availableIds.has(id));
+      if (stillValid.length > 0) {
+        setSelectedModels(stillValid);
+      } else {
+        setSelectedModels([fetchedModels[0].id]);
+      }
+    } catch (err) {
+      setError("Failed to load models. Make sure the backend is running.");
+      console.error("Error fetching models:", err);
+    }
+  };
+
   // Fetch models on mount
   useEffect(() => {
-    async function fetchModels() {
-      try {
-        const fetchedModels = await getModels();
-        setModels(fetchedModels);
-        // Auto-select all models by default
-        setSelectedModels(fetchedModels.map((m) => m.id));
-      } catch (err) {
-        setError("Failed to load models. Make sure the backend is running.");
-        console.error("Error fetching models:", err);
-      }
-    }
-    fetchModels();
+    void refetchModels();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleCompare = async () => {
@@ -81,6 +98,11 @@ export default function Home() {
               selected={selectedModels}
               setSelected={setSelectedModels}
             />
+          </div>
+
+          {/* OpenAI Settings */}
+          <div className="bg-white rounded-2xl shadow-sm shadow-gray-300/50 p-6">
+            <OpenAISettings onValidated={refetchModels} />
           </div>
 
           {/* Error Message */}

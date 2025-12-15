@@ -25,7 +25,7 @@ export default function ResultCard({ result }: ResultCardProps) {
               {result.tokens_out}
             </span>
           )}
-          {result.estimated_cost_usd !== undefined && (
+          {typeof result.estimated_cost_usd === "number" && (
             <span>
               <span className="font-medium">Cost:</span> $
               {result.estimated_cost_usd.toFixed(4)}

@@ -1,5 +1,5 @@
 from functools import lru_cache
-from typing import List
+from typing import List, Optional
 
 from pydantic import Field, HttpUrl
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -28,8 +28,37 @@ class AppSettings(BaseSettings):
         description="CORS allowed origins",
     )
 
+    # OpenAI configuration
+    openai_base_url: HttpUrl = Field(
+        default="https://api.openai.com/v1",
+        description="Base URL for the OpenAI API",
+    )
+    openai_api_key: Optional[str] = Field(
+        default=None,
+        description="OpenAI API key (PLAYGROUND_OPENAI_API_KEY)",
+    )
+    openai_timeout: Optional[float] = Field(
+        default=None,
+        description=(
+            "Override timeout (seconds) for OpenAI requests; "
+            "falls back to request_timeout when not set."
+        ),
+    )
+    openai_max_output_tokens: Optional[int] = Field(
+        default=256,
+        description="Maximum number of tokens for OpenAI completions.",
+    )
+
+    # Gemini configuration
+    gemini_api_key: Optional[str] = Field(
+        default=None,
+        description="Gemini API key (PLAYGROUND_GEMINI_API_KEY).",
+    )
+
 
 @lru_cache
 def get_settings() -> AppSettings:
     return AppSettings()
+
+
 
