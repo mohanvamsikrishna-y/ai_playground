@@ -1,4 +1,3 @@
-import asyncio
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from ..dependencies import get_registry
@@ -20,9 +19,12 @@ async def compare(
             detail=f"Unknown model ids: {', '.join(sorted(missing))}",
         )
 
-    async def run_client(client) -> ModelResponse:
-        return await client.generate(payload.prompt)
+    # Run models sequentially to reduce memory pressure on local machines.
+    # This is slower but less likely to overload the system when using large models.
+    results: list[ModelResponse] = []
+    for client in clients:
+        result = await client.generate(payload.prompt)
+        results.append(result)
 
-    results = await asyncio.gather(*(run_client(client) for client in clients))
     return CompareResponse(results=results)
 
