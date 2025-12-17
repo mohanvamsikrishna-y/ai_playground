@@ -44,7 +44,7 @@ class ModelRegistry:
         # Gemini models (only register if API key is configured)
         if self._settings.gemini_api_key:
             gemini_models = [
-                ("gemini:gemini-1.5-flash", "Gemini 1.5 Flash"),
+                ("gemini:gemini-2.5-flash", "Gemini 2.5 Flash"),
             ]
             for model_id, name in gemini_models:
                 self._clients[model_id] = GeminiClient(

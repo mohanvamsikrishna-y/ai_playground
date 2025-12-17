@@ -111,7 +111,8 @@ class OpenAIClient(BaseModelClient):
         )
 
     async def aclose(self) -> None:
-        await self._client.close()
+        """Close the underlying async HTTP client."""
+        await self._client.aclose()
 
     def _estimate_cost(
         self,

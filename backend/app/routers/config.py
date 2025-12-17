@@ -172,7 +172,7 @@ async def set_gemini_config(payload: GeminiConfigRequest) -> OpenAIConfigRespons
     ) as client:
         try:
             resp = await client.get(
-                "/v1beta/models/gemini-1.5-flash", params={"key": api_key}
+                "/v1beta/models/gemini-2.5-flash", params={"key": api_key}
             )
             resp.raise_for_status()
         except httpx.HTTPStatusError as exc:

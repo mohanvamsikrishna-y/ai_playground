@@ -26,8 +26,10 @@ class GeminiClient(BaseModelClient):
     async def generate(self, prompt: str) -> ModelResponse:
         api_key = (self._settings.gemini_api_key or "").strip()
         if not api_key:
+            # Missing Gemini key is a server-side configuration issue,
+            # so respond with 503 Service Unavailable (consistent with OpenAIClient).
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="Gemini API key not configured",
             )
 
