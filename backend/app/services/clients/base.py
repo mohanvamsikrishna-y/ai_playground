@@ -1,7 +1,7 @@
 import abc
-from typing import Protocol
+from typing import List, Optional, Protocol
 
-from ...schemas import ModelResponse
+from ...schemas import ChatMessage, ModelResponse
 
 
 class BaseModelClient(Protocol):
@@ -12,6 +12,14 @@ class BaseModelClient(Protocol):
     provider: str
 
     @abc.abstractmethod
-    async def generate(self, prompt: str) -> ModelResponse:  # pragma: no cover - interface
+    async def generate(
+        self, prompt: str, api_key: Optional[str] = None
+    ) -> ModelResponse:  # pragma: no cover - interface
+        ...
+
+    @abc.abstractmethod
+    async def chat(
+        self, messages: List[ChatMessage], api_key: Optional[str] = None
+    ) -> str:  # pragma: no cover - interface
         ...
 

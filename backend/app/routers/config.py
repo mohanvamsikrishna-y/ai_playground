@@ -16,11 +16,11 @@ router = APIRouter(prefix="/config", tags=["config"])
 _SECRETS_PATH = Path(__file__).resolve().parent.parent / ".secrets.json"
 
 
-class OpenAIConfigRequest(BaseModel):
+class DeepSeekConfigRequest(BaseModel):
     api_key: str
 
 
-class OpenAIConfigResponse(BaseModel):
+class ProviderConfigResponse(BaseModel):
     has_key: bool
 
 
@@ -44,14 +44,6 @@ def _write_secrets(data: dict) -> None:
         pass
 
 
-def _load_stored_openai_key() -> Optional[str]:
-    data = _load_secrets()
-    key = data.get("openai_api_key")
-    if isinstance(key, str) and key.strip():
-        return key.strip()
-    return None
-
-
 def _load_stored_gemini_key() -> Optional[str]:
     data = _load_secrets()
     key = data.get("gemini_api_key")
@@ -60,100 +52,27 @@ def _load_stored_gemini_key() -> Optional[str]:
     return None
 
 
-def _store_openai_key(key: str) -> None:
-    data = _load_secrets()
-    data["openai_api_key"] = key
-    _write_secrets(data)
-
-
 def _store_gemini_key(key: str) -> None:
     data = _load_secrets()
     data["gemini_api_key"] = key
     _write_secrets(data)
 
 
-@router.get("/openai", response_model=OpenAIConfigResponse)
-async def get_openai_config(
-    settings: AppSettings = Depends(get_settings),
-) -> OpenAIConfigResponse:
-    """Return whether an OpenAI API key is configured (never returns the key)."""
-    has_key = bool(settings.openai_api_key or _load_stored_openai_key())
-    return OpenAIConfigResponse(has_key=has_key)
-
-
-@router.post("/openai", response_model=OpenAIConfigResponse)
-async def set_openai_config(payload: OpenAIConfigRequest) -> OpenAIConfigResponse:
-    """Validate and store the OpenAI API key.
-
-    The key is stored in backend/.secrets.json and also injected into the
-    in-memory settings for the current process so that ModelRegistry can
-    register OpenAI models without restarting the server.
-    """
-
-    api_key = (payload.api_key or "").strip()
-    if not api_key:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="API key must not be empty.",
-        )
-
-    settings = get_settings()
-
-    # Validate the key with a lightweight call to OpenAI.
-    headers = {"Authorization": f"Bearer {api_key}"}
-    timeout = settings.openai_timeout or settings.request_timeout
-
-    async with httpx.AsyncClient(
-        base_url=str(settings.openai_base_url), timeout=timeout
-    ) as client:
-        try:
-            # Use the models endpoint as a cheap validation call.
-            resp = await client.get("/models", headers=headers)
-            resp.raise_for_status()
-        except httpx.HTTPStatusError as exc:
-            detail: str
-            try:
-                data = exc.response.json()
-                detail = data.get("error", {}).get("message") or str(exc)
-            except Exception:
-                detail = str(exc)
-            raise HTTPException(
-                status_code=exc.response.status_code,
-                detail=f"OpenAI API key validation failed: {detail}",
-            ) from exc
-        except httpx.HTTPError as exc:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail=f"Unable to reach OpenAI API: {exc}",
-            ) from exc
-
-    # Persist key locally for future restarts.
-    _store_openai_key(api_key)
-
-    # Update in-memory settings so new requests can use the key immediately.
-    settings.openai_api_key = api_key
-
-    # Reset the model registry so it can register OpenAI models.
-    get_registry.cache_clear()  # type: ignore[attr-defined]
-
-    return OpenAIConfigResponse(has_key=True)
-
-
 class GeminiConfigRequest(BaseModel):
     api_key: str
 
 
-@router.get("/gemini", response_model=OpenAIConfigResponse)
+@router.get("/gemini", response_model=ProviderConfigResponse)
 async def get_gemini_config(
     settings: AppSettings = Depends(get_settings),
-) -> OpenAIConfigResponse:
+) -> ProviderConfigResponse:
     """Return whether a Gemini API key is configured (never returns the key)."""
     has_key = bool(settings.gemini_api_key or _load_stored_gemini_key())
-    return OpenAIConfigResponse(has_key=has_key)
+    return ProviderConfigResponse(has_key=has_key)
 
 
-@router.post("/gemini", response_model=OpenAIConfigResponse)
-async def set_gemini_config(payload: GeminiConfigRequest) -> OpenAIConfigResponse:
+@router.post("/gemini", response_model=ProviderConfigResponse)
+async def set_gemini_config(payload: GeminiConfigRequest) -> ProviderConfigResponse:
     """Validate and store the Gemini API key."""
 
     api_key = (payload.api_key or "").strip()
@@ -197,4 +116,78 @@ async def set_gemini_config(payload: GeminiConfigRequest) -> OpenAIConfigRespons
     get_registry.cache_clear()  # type: ignore[attr-defined]
 
     return OpenAIConfigResponse(has_key=True)
+
+
+def _load_stored_deepseek_key() -> Optional[str]:
+    data = _load_secrets()
+    key = data.get("deepseek_api_key")
+    if isinstance(key, str) and key.strip():
+        return key.strip()
+    return None
+
+
+def _store_deepseek_key(key: str) -> None:
+    data = _load_secrets()
+    data["deepseek_api_key"] = key
+    _write_secrets(data)
+
+
+class DeepSeekConfigRequest(BaseModel):
+    api_key: str
+
+
+@router.get("/deepseek", response_model=ProviderConfigResponse)
+async def get_deepseek_config(
+    settings: AppSettings = Depends(get_settings),
+) -> ProviderConfigResponse:
+    """Return whether a DeepSeek API key is configured (never returns the key)."""
+    has_key = bool(settings.deepseek_api_key or _load_stored_deepseek_key())
+    return ProviderConfigResponse(has_key=has_key)
+
+
+@router.post("/deepseek", response_model=ProviderConfigResponse)
+async def set_deepseek_config(payload: DeepSeekConfigRequest) -> ProviderConfigResponse:
+    """Validate and store the DeepSeek API key."""
+
+    api_key = (payload.api_key or "").strip()
+    if not api_key:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="API key must not be empty.",
+        )
+
+    settings = get_settings()
+    timeout = settings.request_timeout
+
+    # Validate with a lightweight models call.
+    async with httpx.AsyncClient(
+        base_url="https://api.deepseek.com", timeout=timeout
+    ) as client:
+        try:
+            headers = {"Authorization": f"Bearer {api_key}"}
+            # Use the models endpoint as a cheap validation call.
+            resp = await client.get("/models", headers=headers)
+            resp.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            detail: str
+            try:
+                data = exc.response.json()
+                detail = data.get("error", {}).get("message") or str(exc)
+            except Exception:
+                detail = str(exc)
+            raise HTTPException(
+                status_code=exc.response.status_code,
+                detail=f"DeepSeek API key validation failed: {detail}",
+            ) from exc
+        except httpx.HTTPError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=f"Unable to reach DeepSeek API: {exc}",
+            ) from exc
+
+    _store_deepseek_key(api_key)
+    settings.deepseek_api_key = api_key
+    get_registry.cache_clear()  # type: ignore[attr-defined]
+
+    return ProviderConfigResponse(has_key=True)
 

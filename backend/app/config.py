@@ -1,8 +1,26 @@
+import json
 from functools import lru_cache
+from pathlib import Path
 from typing import List, Optional
 
 from pydantic import Field, HttpUrl
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# Path to .secrets.json file
+_SECRETS_PATH = Path(__file__).resolve().parent / ".secrets.json"
+
+
+def _load_secrets() -> dict:
+    """Load secrets from .secrets.json file."""
+    if not _SECRETS_PATH.exists():
+        return {}
+    try:
+        data = json.loads(_SECRETS_PATH.read_text())
+        if isinstance(data, dict):
+            return data
+    except Exception:
+        return {}
+    return {}
 
 
 class AppSettings(BaseSettings):
@@ -20,33 +38,9 @@ class AppSettings(BaseSettings):
     request_timeout: float = Field(
         default=120.0, description="Request timeout for model calls in seconds"
     )
-    allowed_origins: List[str] = Field(
-        default_factory=lambda: [
-            "http://localhost:3000",
-            "http://127.0.0.1:3000",
-        ],
-        description="CORS allowed origins",
-    )
-
-    # OpenAI configuration
-    openai_base_url: HttpUrl = Field(
-        default="https://api.openai.com/v1",
-        description="Base URL for the OpenAI API",
-    )
-    openai_api_key: Optional[str] = Field(
+    cors_origins: Optional[str] = Field(
         default=None,
-        description="OpenAI API key (PLAYGROUND_OPENAI_API_KEY)",
-    )
-    openai_timeout: Optional[float] = Field(
-        default=None,
-        description=(
-            "Override timeout (seconds) for OpenAI requests; "
-            "falls back to request_timeout when not set."
-        ),
-    )
-    openai_max_output_tokens: Optional[int] = Field(
-        default=256,
-        description="Maximum number of tokens for OpenAI completions.",
+        description="CORS allowed origins (comma-separated, PLAYGROUND_CORS_ORIGINS)",
     )
 
     # Gemini configuration
@@ -55,10 +49,59 @@ class AppSettings(BaseSettings):
         description="Gemini API key (PLAYGROUND_GEMINI_API_KEY).",
     )
 
+    # DeepSeek configuration
+    deepseek_api_key: Optional[str] = Field(
+        default=None,
+        description="DeepSeek API key (PLAYGROUND_DEEPSEEK_API_KEY).",
+    )
+
+    # Environment configuration
+    env: Optional[str] = Field(
+        default=None,
+        description="Environment mode (PLAYGROUND_ENV). 'prod' disables Ollama features.",
+    )
+
+    def is_prod(self) -> bool:
+        """Check if running in production environment."""
+        return (self.env or "").lower() == "prod"
+
+    def is_local(self) -> bool:
+        """Check if running in local environment."""
+        return not self.is_prod()
+
+    def get_allowed_origins(self) -> List[str]:
+        """Get CORS allowed origins, parsing from comma-separated string if provided."""
+        if self.cors_origins:
+            # Parse comma-separated origins
+            origins = [origin.strip() for origin in self.cors_origins.split(",")]
+            return [origin for origin in origins if origin]
+        # Default origins
+        return [
+            "http://localhost:3000",
+            "http://127.0.0.1:3000",
+        ]
+
 
 @lru_cache
 def get_settings() -> AppSettings:
-    return AppSettings()
+    """Get application settings, loading API keys from .secrets.json if present."""
+    settings = AppSettings()
+    
+    # Load API keys from .secrets.json if they exist and aren't already set via env vars
+    secrets = _load_secrets()
+    
+    # Only override if not already set from environment variables
+    if not settings.gemini_api_key and "gemini_api_key" in secrets:
+        key = secrets.get("gemini_api_key")
+        if isinstance(key, str) and key.strip():
+            settings.gemini_api_key = key.strip()
+    
+    if not settings.deepseek_api_key and "deepseek_api_key" in secrets:
+        key = secrets.get("deepseek_api_key")
+        if isinstance(key, str) and key.strip():
+            settings.deepseek_api_key = key.strip()
+    
+    return settings
 
 
 

@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -10,9 +10,8 @@ class ModelInfo(BaseModel):
 
 
 class CompareRequest(BaseModel):
-    prompt: str = Field(min_length=1, description="User prompt to send to models")
-    model_ids: List[str] = Field(
-        min_items=1, description="List of model identifiers to run"
+    conversations: Dict[str, List["ChatMessage"]] = Field(
+        min_length=1, description="Conversations per model_id"
     )
 
 
@@ -26,5 +25,36 @@ class ModelResponse(BaseModel):
 
 
 class CompareResponse(BaseModel):
-    results: List[ModelResponse]
+    results: Dict[str, "ChatMessage"]
+    latency_ms: Dict[str, float]
+    errors: Dict[str, str] = Field(
+        default_factory=dict,
+        description="Error messages for models that failed",
+    )
+
+
+class ChatMessage(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str
+
+
+class ChatRequest(BaseModel):
+    model_id: str = Field(min_length=1, description="Model identifier")
+    messages: List[ChatMessage] = Field(
+        min_items=1, description="List of chat messages in conversation order"
+    )
+
+
+class ChatResponse(BaseModel):
+    model_id: str
+    message: str
+
+
+class PullRequest(BaseModel):
+    model: str = Field(min_length=1, description="Ollama model name to download")
+
+
+class PullResponse(BaseModel):
+    status: str
+    model: str
 

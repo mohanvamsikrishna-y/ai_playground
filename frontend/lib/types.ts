@@ -5,8 +5,7 @@ export interface ModelInfo {
 }
 
 export interface CompareRequest {
-  prompt: string;
-  model_ids: string[];
+  conversations: Record<string, ChatMessage[]>;
 }
 
 export interface ModelResponse {
@@ -19,6 +18,23 @@ export interface ModelResponse {
 }
 
 export interface CompareResponse {
-  results: ModelResponse[];
+  results: Record<string, ChatMessage>;
+  latency_ms: Record<string, number>;
+  errors?: Record<string, string>;
+}
+
+export interface ChatMessage {
+  role: "user" | "assistant";
+  content: string;
+}
+
+export interface ChatRequest {
+  model_id: string;
+  messages: ChatMessage[];
+}
+
+export interface ChatResponse {
+  model_id: string;
+  message: string;
 }
 

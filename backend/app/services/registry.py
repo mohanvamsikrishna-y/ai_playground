@@ -1,11 +1,16 @@
+import logging
 from typing import Dict, Iterable, List
+
+import httpx
 
 from ..config import AppSettings
 from ..schemas import ModelInfo
 from .clients.base import BaseModelClient
 from .clients.ollama import OllamaClient
-from .clients.openai import OpenAIClient
 from .clients.gemini import GeminiClient
+from .clients.deepseek import DeepSeekClient
+
+logger = logging.getLogger(__name__)
 
 
 class ModelRegistry:
@@ -16,30 +21,55 @@ class ModelRegistry:
         self._clients: Dict[str, BaseModelClient] = {}
         self._bootstrap_defaults()
 
-    def _bootstrap_defaults(self) -> None:
-        # Local Ollama models
-        ollama_defaults = [
-            ("llama3", "Llama 3"),
-            ("mistral", "Mistral 7B"),
-            ("gemma", "Gemma 2B"),
-        ]
-        for model_id, name in ollama_defaults:
-            self._clients[model_id] = OllamaClient(
-                model_id=model_id, model_name=name, settings=self._settings
+    def _load_ollama_models(self, refresh: bool = False) -> None:
+        """Load Ollama models dynamically from Ollama API."""
+        if self._settings.is_prod():
+            # Skip Ollama models in production
+            return
+
+        # Remove existing Ollama models if refreshing
+        if refresh:
+            ollama_model_ids = [
+                model_id for model_id in self._clients.keys()
+                if model_id.startswith("ollama:")
+            ]
+            for model_id in ollama_model_ids:
+                del self._clients[model_id]
+
+        try:
+            # Use sync client for synchronous initialization
+            with httpx.Client(
+                base_url=str(self._settings.ollama_base_url),
+                timeout=self._settings.request_timeout,
+            ) as client:
+                response = client.get("/api/tags")
+                response.raise_for_status()
+                data = response.json()
+                models = data.get("models", [])
+
+                for model_data in models:
+                    model_name = model_data.get("name", "")
+                    if model_name:
+                        # Use "ollama:<name>" as model_id for consistency with other providers
+                        model_id = f"ollama:{model_name}"
+                        self._clients[model_id] = OllamaClient(
+                            model_id=model_id,
+                            model_name=model_name,
+                            settings=self._settings,
+                        )
+        except Exception as exc:
+            # Log but don't crash if Ollama is not available
+            logger.warning(
+                f"Failed to load Ollama models (Ollama may not be running): {exc}"
             )
 
-        # OpenAI models (only register if API key is configured)
-        if self._settings.openai_api_key:
-            openai_models = [
-                ("openai:gpt-4o", "GPT-4o"),
-                ("openai:gpt-4o-mini", "GPT-4o Mini"),
-            ]
-            for model_id, name in openai_models:
-                self._clients[model_id] = OpenAIClient(
-                    model_id=model_id,
-                    model_name=name,
-                    settings=self._settings,
-                )
+    def refresh_ollama_models(self) -> None:
+        """Refresh Ollama models from the API (useful after downloading a new model)."""
+        self._load_ollama_models(refresh=True)
+
+    def _bootstrap_defaults(self) -> None:
+        # Load Ollama models dynamically from API
+        self._load_ollama_models()
 
         # Gemini models (only register if API key is configured)
         if self._settings.gemini_api_key:
@@ -48,6 +78,18 @@ class ModelRegistry:
             ]
             for model_id, name in gemini_models:
                 self._clients[model_id] = GeminiClient(
+                    model_id=model_id,
+                    model_name=name,
+                    settings=self._settings,
+                )
+
+        # DeepSeek models (only register if API key is configured)
+        if self._settings.deepseek_api_key:
+            deepseek_models = [
+                ("deepseek:chat", "DeepSeek Chat"),
+            ]
+            for model_id, name in deepseek_models:
+                self._clients[model_id] = DeepSeekClient(
                     model_id=model_id,
                     model_name=name,
                     settings=self._settings,

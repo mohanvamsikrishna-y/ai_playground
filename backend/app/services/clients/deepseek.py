@@ -9,17 +9,17 @@ from ...schemas import ChatMessage, ModelResponse
 from .base import BaseModelClient
 
 
-class GeminiClient(BaseModelClient):
-    """Client for Google Gemini models via the Generative Language REST API."""
+class DeepSeekClient(BaseModelClient):
+    """Client for DeepSeek models via the DeepSeek REST API."""
 
-    provider = "gemini"
+    provider = "deepseek"
 
     def __init__(self, model_id: str, model_name: str, settings: AppSettings):
-        self.model_id = model_id  # e.g. "gemini:gemini-2.5-flash"
+        self.model_id = model_id  # e.g. "deepseek:chat"
         self.model_name = model_name
         self._settings = settings
         self._client = httpx.AsyncClient(
-            base_url="https://generativelanguage.googleapis.com",
+            base_url="https://api.deepseek.com",
             timeout=settings.request_timeout,
         )
 
@@ -27,75 +27,77 @@ class GeminiClient(BaseModelClient):
         self, prompt: str, api_key: Optional[str] = None
     ) -> ModelResponse:
         # Use provided api_key or fall back to settings
-        api_key = (api_key or self._settings.gemini_api_key or "").strip()
+        api_key = (api_key or self._settings.deepseek_api_key or "").strip()
         if not api_key:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Gemini API key required. Add it in Settings.",
+                detail="DeepSeek API key required. Add it in Settings.",
             )
 
-        # Underlying Gemini API expects the bare model name, e.g. "gemini-2.5-flash".
+        # Underlying DeepSeek API expects the bare model name, e.g. "deepseek-chat".
         api_model = self.model_id.split(":", 1)[-1]
-        path = f"/v1beta/models/{api_model}:generateContent"
-        params = {"key": api_key}
+        # Convert "chat" to "deepseek-chat" for the API
+        if api_model == "chat":
+            api_model = "deepseek-chat"
+
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        }
+
         body: Dict[str, Any] = {
-            "contents": [
+            "model": api_model,
+            "messages": [
                 {
                     "role": "user",
-                    "parts": [{"text": str(prompt)}],
+                    "content": str(prompt),
                 }
-            ]
+            ],
         }
 
         start = time.perf_counter()
         try:
             response = await self._client.post(
-                path,
-                params=params,
+                "/chat/completions",
                 json=body,
-                headers={"Content-Type": "application/json"},
+                headers=headers,
             )
             response.raise_for_status()
         except httpx.HTTPStatusError as exc:
             detail: str
             try:
                 data = exc.response.json()
-                # Gemini error format: {"error": {"message": "...", ...}}
+                # DeepSeek error format: {"error": {"message": "...", ...}}
                 detail = data.get("error", {}).get("message", str(exc))
             except Exception:
                 detail = str(exc)
             raise HTTPException(
                 status_code=exc.response.status_code,
-                detail=f"Gemini API error: {detail}",
+                detail=f"DeepSeek API error: {detail}",
             ) from exc
         except httpx.HTTPError as exc:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail=f"Gemini request failed for {self.model_id}: {exc}",
+                detail=f"DeepSeek request failed for {self.model_id}: {exc}",
             ) from exc
 
         latency_ms = (time.perf_counter() - start) * 1000
         data = response.json()
 
-        # Extract the first candidate's first text part, if available.
+        # Extract output from choices[0].message.content
         output = ""
         try:
-            candidates = data.get("candidates") or []
-            if candidates:
-                content = candidates[0].get("content") or {}
-                parts = content.get("parts") or []
-                if parts:
-                    first_part = parts[0]
-                    if isinstance(first_part, dict):
-                        output = first_part.get("text", "") or ""
+            choices = data.get("choices") or []
+            if choices:
+                message = choices[0].get("message") or {}
+                output = message.get("content", "") or ""
         except Exception:
             # If the response format is unexpected, fall back to empty string.
             output = ""
 
-        # Token usage may or may not be present; default to None if missing.
-        usage: Dict[str, Any] = data.get("usageMetadata") or {}
-        tokens_in: Optional[int] = usage.get("promptTokenCount")
-        tokens_out: Optional[int] = usage.get("candidatesTokenCount")
+        # Token counts not provided by DeepSeek API in free tier
+        tokens_in: Optional[int] = None
+        tokens_out: Optional[int] = None
 
         return ModelResponse(
             model_id=self.model_id,
@@ -109,40 +111,41 @@ class GeminiClient(BaseModelClient):
     async def chat(
         self, messages: List[ChatMessage], api_key: Optional[str] = None
     ) -> str:
-        """Send chat messages to Gemini and return assistant response."""
+        """Send chat messages to DeepSeek and return assistant response."""
         # Use provided api_key or fall back to settings
-        api_key = (api_key or self._settings.gemini_api_key or "").strip()
+        api_key = (api_key or self._settings.deepseek_api_key or "").strip()
         if not api_key:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Gemini API key required. Add it in Settings.",
+                detail="DeepSeek API key required. Add it in Settings.",
             )
 
-        # Underlying Gemini API expects the bare model name, e.g. "gemini-2.5-flash".
+        # Underlying DeepSeek API expects the bare model name, e.g. "deepseek-chat".
         api_model = self.model_id.split(":", 1)[-1]
-        path = f"/v1beta/models/{api_model}:generateContent"
-        params = {"key": api_key}
+        # Convert "chat" to "deepseek-chat" for the API
+        if api_model == "chat":
+            api_model = "deepseek-chat"
 
-        # Convert ChatMessage list to Gemini format
-        # Gemini uses "model" instead of "assistant" for assistant role
-        contents: List[Dict[str, Any]] = []
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        }
+
+        # Convert ChatMessage list to DeepSeek format
+        deepseek_messages: List[Dict[str, str]] = []
         for msg in messages:
-            gemini_role = "model" if msg.role == "assistant" else "user"
-            contents.append(
-                {
-                    "role": gemini_role,
-                    "parts": [{"text": msg.content}],
-                }
-            )
+            deepseek_messages.append({"role": msg.role, "content": msg.content})
 
-        body: Dict[str, Any] = {"contents": contents}
+        body: Dict[str, Any] = {
+            "model": api_model,
+            "messages": deepseek_messages,
+        }
 
         try:
             response = await self._client.post(
-                path,
-                params=params,
+                "/chat/completions",
                 json=body,
-                headers={"Content-Type": "application/json"},
+                headers=headers,
             )
             response.raise_for_status()
         except httpx.HTTPStatusError as exc:
@@ -154,27 +157,23 @@ class GeminiClient(BaseModelClient):
                 detail = str(exc)
             raise HTTPException(
                 status_code=exc.response.status_code,
-                detail=f"Gemini API error: {detail}",
+                detail=f"DeepSeek API error: {detail}",
             ) from exc
         except httpx.HTTPError as exc:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail=f"Gemini request failed for {self.model_id}: {exc}",
+                detail=f"DeepSeek request failed for {self.model_id}: {exc}",
             ) from exc
 
         data = response.json()
 
-        # Extract the first candidate's first text part, if available.
+        # Extract output from choices[0].message.content
         output = ""
         try:
-            candidates = data.get("candidates") or []
-            if candidates:
-                content = candidates[0].get("content") or {}
-                parts = content.get("parts") or []
-                if parts:
-                    first_part = parts[0]
-                    if isinstance(first_part, dict):
-                        output = first_part.get("text", "") or ""
+            choices = data.get("choices") or []
+            if choices:
+                message = choices[0].get("message") or {}
+                output = message.get("content", "") or ""
         except Exception:
             output = ""
 
@@ -182,5 +181,4 @@ class GeminiClient(BaseModelClient):
 
     async def aclose(self) -> None:
         await self._client.aclose()
-
 
