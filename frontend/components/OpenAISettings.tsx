@@ -1,14 +1,18 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { getApiKey, setApiKey, removeApiKey, hasApiKey as checkHasKey } from "@/lib/storage";
 
 interface OpenAISettingsProps {
   onValidated?: () => void;
 }
 
 export default function OpenAISettings({ onValidated }: OpenAISettingsProps) {
+  const { data: session } = useSession();
+
   // Gemini state
   const [geminiKey, setGeminiKey] = useState("");
   const [hasGeminiKey, setHasGeminiKey] = useState(false);
@@ -19,36 +23,41 @@ export default function OpenAISettings({ onValidated }: OpenAISettingsProps) {
   const [hasDeepSeekKey, setHasDeepSeekKey] = useState(false);
   const [deepseekMessage, setDeepseekMessage] = useState<string | null>(null);
 
-  // Load status from localStorage on mount
+  // OpenAI state
+  const [openaiKey, setOpenaiKey] = useState("");
+  const [hasOpenAIKey, setHasOpenAIKey] = useState(false);
+  const [openaiMessage, setOpenaiMessage] = useState<string | null>(null);
+
+  // Claude state
+  const [claudeKey, setClaudeKey] = useState("");
+  const [hasClaudeKey, setHasClaudeKey] = useState(false);
+  const [claudeMessage, setClaudeMessage] = useState<string | null>(null);
+
   useEffect(() => {
-    const checkKeys = () => {
-      setHasGeminiKey(localStorage.getItem("gemini_api_key") !== null);
-      setHasDeepSeekKey(localStorage.getItem("deepseek_api_key") !== null);
+    const refreshKeyStatus = () => {
+      setHasGeminiKey(checkHasKey("gemini"));
+      setHasDeepSeekKey(checkHasKey("deepseek"));
+      setHasOpenAIKey(checkHasKey("openai"));
+      setHasClaudeKey(checkHasKey("claude"));
     };
-    checkKeys();
-    // Also check when storage changes (e.g., from another tab)
-    window.addEventListener("storage", checkKeys);
-    return () => window.removeEventListener("storage", checkKeys);
-  }, []);
+    refreshKeyStatus();
+    window.addEventListener("storage", refreshKeyStatus);
+    return () => window.removeEventListener("storage", refreshKeyStatus);
+  }, [session]);
 
   const handleGeminiSubmit = (event: React.FormEvent) => {
     event.preventDefault();
-    if (!geminiKey.trim()) {
-      return;
-    }
-    localStorage.setItem("gemini_api_key", geminiKey.trim());
+    if (!geminiKey.trim()) return;
+    setApiKey("gemini", geminiKey.trim());
     setHasGeminiKey(true);
     setGeminiMessage("Gemini API key saved.");
     setGeminiKey("");
-    if (onValidated) {
-      onValidated();
-    }
-    // Clear message after 3 seconds
+    onValidated?.();
     setTimeout(() => setGeminiMessage(null), 3000);
   };
 
   const handleGeminiClear = () => {
-    localStorage.removeItem("gemini_api_key");
+    removeApiKey("gemini");
     setHasGeminiKey(false);
     setGeminiMessage("Gemini API key cleared.");
     setTimeout(() => setGeminiMessage(null), 3000);
@@ -56,25 +65,56 @@ export default function OpenAISettings({ onValidated }: OpenAISettingsProps) {
 
   const handleDeepSeekSubmit = (event: React.FormEvent) => {
     event.preventDefault();
-    if (!deepseekKey.trim()) {
-      return;
-    }
-    localStorage.setItem("deepseek_api_key", deepseekKey.trim());
+    if (!deepseekKey.trim()) return;
+    setApiKey("deepseek", deepseekKey.trim());
     setHasDeepSeekKey(true);
     setDeepseekMessage("DeepSeek API key saved.");
     setDeepseekKey("");
-    if (onValidated) {
-      onValidated();
-    }
-    // Clear message after 3 seconds
+    onValidated?.();
     setTimeout(() => setDeepseekMessage(null), 3000);
   };
 
   const handleDeepSeekClear = () => {
-    localStorage.removeItem("deepseek_api_key");
+    removeApiKey("deepseek");
     setHasDeepSeekKey(false);
     setDeepseekMessage("DeepSeek API key cleared.");
     setTimeout(() => setDeepseekMessage(null), 3000);
+  };
+
+  const handleOpenAISubmit = (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!openaiKey.trim()) return;
+    setApiKey("openai", openaiKey.trim());
+    setHasOpenAIKey(true);
+    setOpenaiMessage("OpenAI API key saved.");
+    setOpenaiKey("");
+    onValidated?.();
+    setTimeout(() => setOpenaiMessage(null), 3000);
+  };
+
+  const handleOpenAIClear = () => {
+    removeApiKey("openai");
+    setHasOpenAIKey(false);
+    setOpenaiMessage("OpenAI API key cleared.");
+    setTimeout(() => setOpenaiMessage(null), 3000);
+  };
+
+  const handleClaudeSubmit = (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!claudeKey.trim()) return;
+    setApiKey("claude", claudeKey.trim());
+    setHasClaudeKey(true);
+    setClaudeMessage("Claude API key saved.");
+    setClaudeKey("");
+    onValidated?.();
+    setTimeout(() => setClaudeMessage(null), 3000);
+  };
+
+  const handleClaudeClear = () => {
+    removeApiKey("claude");
+    setHasClaudeKey(false);
+    setClaudeMessage("Claude API key cleared.");
+    setTimeout(() => setClaudeMessage(null), 3000);
   };
 
   return (
@@ -84,6 +124,132 @@ export default function OpenAISettings({ onValidated }: OpenAISettingsProps) {
         <p className="text-sm text-blue-800">
           Keys are stored only in your browser and are never saved on the server.
         </p>
+      </div>
+
+      {/* OpenAI - near top so visible without scrolling */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-slate-900">
+            OpenAI Settings
+          </h2>
+          <span
+            className={`rounded-full px-3 py-1 text-xs font-medium ${
+              hasOpenAIKey
+                ? "bg-emerald-100 text-emerald-700"
+                : "bg-gray-100 text-gray-600"
+            }`}
+          >
+            {hasOpenAIKey ? "Configured" : "Not configured"}
+          </span>
+        </div>
+        <p className="text-sm text-gray-600">
+          Add your OpenAI API key to enable GPT-4o and GPT-4o Mini.
+        </p>
+        <form onSubmit={handleOpenAISubmit} className="space-y-3">
+          <div className="space-y-1">
+            <label
+              htmlFor="openai-api-key"
+              className="block text-sm font-medium text-slate-900"
+            >
+              OpenAI API Key
+            </label>
+            <Input
+              id="openai-api-key"
+              type="password"
+              placeholder="sk-..."
+              value={openaiKey}
+              onChange={(e) => setOpenaiKey(e.target.value)}
+              className="rounded-2xl"
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              type="submit"
+              disabled={!openaiKey.trim()}
+              className="rounded-2xl"
+            >
+              Save
+            </Button>
+            {hasOpenAIKey && (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleOpenAIClear}
+                className="rounded-2xl"
+              >
+                Clear Key
+              </Button>
+            )}
+          </div>
+        </form>
+        {openaiMessage && (
+          <p className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-2xl px-3 py-2">
+            {openaiMessage}
+          </p>
+        )}
+      </div>
+
+      {/* Claude - near top so visible without scrolling */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-slate-900">
+            Claude Settings
+          </h2>
+          <span
+            className={`rounded-full px-3 py-1 text-xs font-medium ${
+              hasClaudeKey
+                ? "bg-emerald-100 text-emerald-700"
+                : "bg-gray-100 text-gray-600"
+            }`}
+          >
+            {hasClaudeKey ? "Configured" : "Not configured"}
+          </span>
+        </div>
+        <p className="text-sm text-gray-600">
+          Add your Anthropic API key to enable Claude 3 Haiku and Sonnet.
+        </p>
+        <form onSubmit={handleClaudeSubmit} className="space-y-3">
+          <div className="space-y-1">
+            <label
+              htmlFor="claude-api-key"
+              className="block text-sm font-medium text-slate-900"
+            >
+              Claude API Key
+            </label>
+            <Input
+              id="claude-api-key"
+              type="password"
+              placeholder="sk-ant-..."
+              value={claudeKey}
+              onChange={(e) => setClaudeKey(e.target.value)}
+              className="rounded-2xl"
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              type="submit"
+              disabled={!claudeKey.trim()}
+              className="rounded-2xl"
+            >
+              Save
+            </Button>
+            {hasClaudeKey && (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleClaudeClear}
+                className="rounded-2xl"
+              >
+                Clear Key
+              </Button>
+            )}
+          </div>
+        </form>
+        {claudeMessage && (
+          <p className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-2xl px-3 py-2">
+            {claudeMessage}
+          </p>
+        )}
       </div>
 
       {/* Gemini */}

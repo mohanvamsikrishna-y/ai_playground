@@ -5,7 +5,8 @@ import Header from "@/components/Header";
 import ChatInput from "@/components/ChatInput";
 import Sidebar from "@/components/Sidebar";
 import ChatTabs from "@/components/ChatTabs";
-import { getModels, compareModels } from "@/lib/api";
+import { getModels, compareModels, AuthError } from "@/lib/api";
+import { track } from "@/lib/analytics";
 import type { ChatMessage, ModelInfo } from "@/lib/types";
 
 export default function Home() {
@@ -54,6 +55,7 @@ export default function Home() {
 
   // Fetch models on mount
   useEffect(() => {
+    track("playground_opened");
     void refetchModels();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -97,9 +99,13 @@ export default function Home() {
     }
     setConversations(updatedConversations);
 
-    // Clear input immediately for better UX
     const currentPrompt = prompt;
     setPrompt("");
+
+    for (const modelId of selectedModels) {
+      const provider = models.find((m) => m.id === modelId)?.provider;
+      track("chat_sent", { model_id: modelId, model_provider: provider });
+    }
 
     // Build conversations dict with only selected models
     const conversationsToSend: Record<string, ChatMessage[]> = {};
@@ -121,23 +127,29 @@ export default function Home() {
 
       for (const modelId of selectedModels) {
         if (response.results[modelId]) {
-          // Success: append assistant message
           finalConversations[modelId] = [
             ...finalConversations[modelId],
             response.results[modelId],
           ];
+          track("response_received", {
+            model_id: modelId,
+            latency_ms: response.latency_ms?.[modelId],
+            success: true,
+          });
         } else {
-          // Model failed - use error message from backend if available
           const errorMessage =
             response.errors?.[modelId] || "No response received";
           newModelErrors[modelId] = errorMessage;
-          // Revert user message for failed model
           if (finalConversations[modelId]) {
             finalConversations[modelId] = finalConversations[modelId].slice(
               0,
               -1
             );
           }
+          track("error_occurred", {
+            model_id: modelId,
+            error: errorMessage,
+          });
         }
       }
 
@@ -152,13 +164,26 @@ export default function Home() {
         setError(null);
       }
     } catch (err) {
-      // Handle request-level errors
+      if (err instanceof AuthError) {
+        setError("Session expired. Please sign in again.");
+        setPrompt(currentPrompt);
+        // Revert user messages
+        const revertedConversations = { ...updatedConversations };
+        for (const modelId of selectedModels) {
+          if (revertedConversations[modelId]) {
+            revertedConversations[modelId] = revertedConversations[modelId].slice(0, -1);
+          }
+        }
+        setConversations(revertedConversations);
+        setIsLoading(false);
+        return;
+      }
+
       const errorMessage =
         err instanceof Error
           ? err.message
           : "Failed to send message. Please try again.";
 
-      // Revert user messages for all models on request failure
       const revertedConversations: Record<string, ChatMessage[]> = {
         ...updatedConversations,
       };
@@ -178,8 +203,10 @@ export default function Home() {
       setConversations(revertedConversations);
       setModelErrors(errorState);
       setError(errorMessage);
-      // Restore prompt on error
       setPrompt(currentPrompt);
+      for (const modelId of selectedModels) {
+        track("error_occurred", { model_id: modelId, error: errorMessage });
+      }
       console.error("Error sending message:", err);
     } finally {
       setIsLoading(false);

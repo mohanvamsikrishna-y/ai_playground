@@ -8,48 +8,61 @@ from ...config import AppSettings
 from ...schemas import ChatMessage, ModelResponse
 from .base import BaseModelClient
 
+# Map our model_id suffix to Anthropic API model names.
+# Registry uses ids like "claude:opus-4.6" and "claude:sonnet-4.5".
+# If Anthropic exposes different canonical model ids, they can be mapped here.
+CLAUDE_MODEL_MAP = {
+    "opus-4.6": "opus-4.6",
+    "sonnet-4.5": "sonnet-4.5",
+}
 
-class OpenAIClient(BaseModelClient):
-    """Client for OpenAI models via the Chat Completions API."""
 
-    provider = "openai"
+class ClaudeClient(BaseModelClient):
+    """Client for Anthropic Claude models via the Messages API."""
+
+    provider = "claude"
 
     def __init__(self, model_id: str, model_name: str, settings: AppSettings):
-        self.model_id = model_id  # e.g. "openai:gpt-4o"
+        self.model_id = model_id  # e.g. "claude:claude-3-haiku"
         self.model_name = model_name
         self._settings = settings
         self._client = httpx.AsyncClient(
-            base_url="https://api.openai.com",
+            base_url="https://api.anthropic.com",
             timeout=settings.request_timeout,
         )
 
     def _get_api_model(self) -> str:
-        """Strip openai: prefix for API model name."""
-        return self.model_id.split(":", 1)[-1]
+        """Resolve to Anthropic API model name."""
+        suffix = self.model_id.split(":", 1)[-1]
+        return CLAUDE_MODEL_MAP.get(suffix, suffix)
 
     async def generate(
         self, prompt: str, api_key: Optional[str] = None
     ) -> ModelResponse:
-        api_key = (api_key or self._settings.openai_api_key or "").strip()
+        api_key = (api_key or self._settings.claude_api_key or "").strip()
         if not api_key:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="OpenAI API key required. Add it in Settings.",
+                detail="Claude API key required. Add it in Settings.",
             )
 
         headers = {
-            "Authorization": f"Bearer {api_key}",
+            "x-api-key": api_key,
+            "anthropic-version": "2023-06-01",
             "Content-Type": "application/json",
         }
         body: Dict[str, Any] = {
             "model": self._get_api_model(),
-            "messages": [{"role": "user", "content": str(prompt)}],
+            "max_tokens": 4096,
+            "messages": [
+                {"role": "user", "content": [{"type": "text", "text": str(prompt)}]}
+            ],
         }
 
         start = time.perf_counter()
         try:
             response = await self._client.post(
-                "/v1/chat/completions",
+                "/v1/messages",
                 json=body,
                 headers=headers,
             )
@@ -63,12 +76,12 @@ class OpenAIClient(BaseModelClient):
                 detail = str(exc)
             raise HTTPException(
                 status_code=exc.response.status_code,
-                detail=f"OpenAI API error: {detail}",
+                detail=f"Claude API error: {detail}",
             ) from exc
         except httpx.HTTPError as exc:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail=f"OpenAI request failed for {self.model_id}: {exc}",
+                detail=f"Claude request failed for {self.model_id}: {exc}",
             ) from exc
 
         latency_ms = (time.perf_counter() - start) * 1000
@@ -76,16 +89,16 @@ class OpenAIClient(BaseModelClient):
 
         output = ""
         try:
-            choices = data.get("choices") or []
-            if choices:
-                message = choices[0].get("message") or {}
-                output = message.get("content", "") or ""
+            for block in data.get("content") or []:
+                if block.get("type") == "text":
+                    output += block.get("text", "") or ""
+                    break
         except Exception:
-            output = ""
+            pass
 
         usage: Dict[str, Any] = data.get("usage") or {}
-        tokens_in: Optional[int] = usage.get("prompt_tokens")
-        tokens_out: Optional[int] = usage.get("completion_tokens")
+        tokens_in: Optional[int] = usage.get("input_tokens")
+        tokens_out: Optional[int] = usage.get("output_tokens")
 
         return ModelResponse(
             model_id=self.model_id,
@@ -99,29 +112,36 @@ class OpenAIClient(BaseModelClient):
     async def chat(
         self, messages: List[ChatMessage], api_key: Optional[str] = None
     ) -> str:
-        api_key = (api_key or self._settings.openai_api_key or "").strip()
+        api_key = (api_key or self._settings.claude_api_key or "").strip()
         if not api_key:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="OpenAI API key required. Add it in Settings.",
+                detail="Claude API key required. Add it in Settings.",
             )
 
         headers = {
-            "Authorization": f"Bearer {api_key}",
+            "x-api-key": api_key,
+            "anthropic-version": "2023-06-01",
             "Content-Type": "application/json",
         }
-        openai_messages: List[Dict[str, str]] = []
+        claude_messages: List[Dict[str, Any]] = []
         for msg in messages:
-            openai_messages.append({"role": msg.role, "content": msg.content})
+            claude_messages.append(
+                {
+                    "role": msg.role,
+                    "content": [{"type": "text", "text": msg.content}],
+                }
+            )
 
         body: Dict[str, Any] = {
             "model": self._get_api_model(),
-            "messages": openai_messages,
+            "max_tokens": 4096,
+            "messages": claude_messages,
         }
 
         try:
             response = await self._client.post(
-                "/v1/chat/completions",
+                "/v1/messages",
                 json=body,
                 headers=headers,
             )
@@ -135,23 +155,23 @@ class OpenAIClient(BaseModelClient):
                 detail = str(exc)
             raise HTTPException(
                 status_code=exc.response.status_code,
-                detail=f"OpenAI API error: {detail}",
+                detail=f"Claude API error: {detail}",
             ) from exc
         except httpx.HTTPError as exc:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail=f"OpenAI request failed for {self.model_id}: {exc}",
+                detail=f"Claude request failed for {self.model_id}: {exc}",
             ) from exc
 
         data = response.json()
         output = ""
         try:
-            choices = data.get("choices") or []
-            if choices:
-                message = choices[0].get("message") or {}
-                output = message.get("content", "") or ""
+            for block in data.get("content") or []:
+                if block.get("type") == "text":
+                    output += block.get("text", "") or ""
+                    break
         except Exception:
-            output = ""
+            pass
         return output
 
     async def aclose(self) -> None:

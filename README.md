@@ -9,6 +9,8 @@ A modern chat interface for comparing multiple AI models side-by-side. Supports 
 - **Cloud providers**: Support for Gemini and DeepSeek via BYOK
 - **Modern UI**: Clean chat interface with tabs, sidebar, and fixed input
 - **Secure**: API keys stored only in browser localStorage, never on server
+- **Google Login**: Optional Google OAuth sign-in via NextAuth
+- **Analytics**: Optional PostHog event tracking (frontend + backend)
 
 ## Deployment Modes
 
@@ -102,11 +104,19 @@ This project supports two deployment modes using the same codebase:
 | `PLAYGROUND_GEMINI_API_KEY` | Optional server-side Gemini key | `None` |
 | `PLAYGROUND_DEEPSEEK_API_KEY` | Optional server-side DeepSeek key | `None` |
 
+| `PLAYGROUND_GOOGLE_CLIENT_ID` | Google OAuth client ID (for token verification) | `None` |
+| `PLAYGROUND_POSTHOG_KEY` | PostHog project API key (server-side analytics) | `None` |
+
 ### Frontend Variables
 
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `NEXT_PUBLIC_API_BASE_URL` | Backend API URL | `http://localhost:8000` |
+| `AUTH_SECRET` | NextAuth session encryption secret | **Required for auth** |
+| `AUTH_GOOGLE_ID` | Google OAuth client ID | **Required for auth** |
+| `AUTH_GOOGLE_SECRET` | Google OAuth client secret | **Required for auth** |
+| `NEXT_PUBLIC_POSTHOG_KEY` | PostHog project API key (frontend events) | `None` |
+| `NEXT_PUBLIC_POSTHOG_HOST` | PostHog API host | `https://us.i.posthog.com` |
 
 ## Docker Compose Options
 
@@ -166,6 +176,83 @@ export PLAYGROUND_ENV=prod
 export PLAYGROUND_CORS_ORIGINS=https://your-domain.com
 # Deploy to Cloud Run
 ```
+
+## Google OAuth Setup (Optional)
+
+Google Login is optional. The app works without it — compare and models remain fully public.
+
+### 1. Create Google OAuth credentials
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com/)
+2. Create a project (or select an existing one)
+3. Navigate to **APIs & Services > Credentials**
+4. Click **Create Credentials > OAuth 2.0 Client ID**
+5. Application type: **Web application**
+6. Add **Authorized redirect URIs**:
+   - Local: `http://localhost:3000/api/auth/callback/google`
+   - Production: `https://your-frontend-url/api/auth/callback/google`
+7. Copy the **Client ID** and **Client Secret**
+
+### 2. Set environment variables
+
+**Frontend** (`.env.local` or deployment env):
+```bash
+AUTH_SECRET=$(openssl rand -base64 32)
+AUTH_GOOGLE_ID=<your-google-client-id>
+AUTH_GOOGLE_SECRET=<your-google-client-secret>
+```
+
+**Backend** (env or `.env`):
+```bash
+PLAYGROUND_GOOGLE_CLIENT_ID=<your-google-client-id>
+```
+
+The backend uses the client ID to verify Google ID tokens sent by the frontend in `Authorization: Bearer <id_token>` headers.
+
+### 3. Test
+
+1. Start the app
+2. Click "Sign in with Google" in the sidebar
+3. Complete the Google OAuth flow
+4. Your avatar and name should appear in the sidebar
+5. Hit `GET /auth/me` with the token to verify backend verification works
+
+## Analytics Setup (Optional)
+
+Analytics are powered by [PostHog](https://posthog.com/) and are completely optional. No events are sent unless PostHog keys are configured.
+
+### 1. Create a PostHog project
+
+1. Sign up at [posthog.com](https://posthog.com/)
+2. Create a project
+3. Copy the **Project API Key** from Settings > Project
+
+### 2. Set environment variables
+
+**Frontend** (for browser-side events):
+```bash
+NEXT_PUBLIC_POSTHOG_KEY=phc_xxx
+NEXT_PUBLIC_POSTHOG_HOST=https://us.i.posthog.com  # optional, defaults to US cloud
+```
+
+**Backend** (for server-side events — optional):
+```bash
+PLAYGROUND_POSTHOG_KEY=phc_xxx
+```
+
+### 3. Tracked events
+
+| Event | Source | Properties |
+|-------|--------|------------|
+| `playground_opened` | Frontend | — |
+| `model_selected` | Frontend | `model_id`, `model_provider`, `selected` |
+| `chat_sent` | Frontend | `model_id`, `model_provider` |
+| `response_received` | Frontend | `model_id`, `latency_ms`, `success` |
+| `error_occurred` | Frontend | `model_id`, `error` |
+| `compare_request_received` | Backend | `model_ids`, `model_count` |
+| `compare_request_completed` | Backend | `model_ids`, `success_count`, `error_count`, `latency_ms` |
+
+Prompts and responses are **never** logged or sent to analytics.
 
 ## Development
 

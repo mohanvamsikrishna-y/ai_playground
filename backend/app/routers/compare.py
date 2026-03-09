@@ -1,10 +1,11 @@
 import logging
 import time
-from typing import Dict
+from typing import Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 
-from ..dependencies import get_registry
+from ..analytics import capture_event
+from ..dependencies import get_registry, require_auth
 from ..schemas import ChatMessage, CompareRequest, CompareResponse
 from ..services.registry import ModelRegistry
 
@@ -18,14 +19,22 @@ async def compare(
     payload: CompareRequest,
     request: Request,
     registry: ModelRegistry = Depends(get_registry),
+    _user: Optional[dict] = Depends(require_auth),
 ) -> CompareResponse:
     """Compare multiple models with their own conversation contexts."""
     # Extract API keys from request headers (never log these)
     gemini_key = request.headers.get("X-GEMINI-API-KEY")
     deepseek_key = request.headers.get("X-DEEPSEEK-API-KEY")
+    openai_key = request.headers.get("X-OPENAI-API-KEY")
+    claude_key = request.headers.get("X-CLAUDE-API-KEY")
 
-    # Get all unique model IDs from conversations
     model_ids = list(payload.conversations.keys())
+
+    await capture_event(
+        "compare_request_received",
+        properties={"model_ids": model_ids, "model_count": len(model_ids)},
+    )
+
     if not model_ids:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -61,6 +70,10 @@ async def compare(
                 assistant_content = await client.chat(messages, api_key=gemini_key)
             elif client.provider == "deepseek":
                 assistant_content = await client.chat(messages, api_key=deepseek_key)
+            elif client.provider == "openai":
+                assistant_content = await client.chat(messages, api_key=openai_key)
+            elif client.provider == "claude":
+                assistant_content = await client.chat(messages, api_key=claude_key)
             else:  # ollama or other providers that don't need keys
                 assistant_content = await client.chat(messages)
             elapsed_ms = (time.perf_counter() - start) * 1000
@@ -93,7 +106,15 @@ async def compare(
             else:
                 errors[model_id] = f"Model error: {error_msg}"
 
-    # Return results even if some models failed
-    # Frontend will display errors for failed models
+    await capture_event(
+        "compare_request_completed",
+        properties={
+            "model_ids": model_ids,
+            "success_count": len(results),
+            "error_count": len(errors),
+            "latency_ms": latency_ms,
+        },
+    )
+
     return CompareResponse(results=results, latency_ms=latency_ms, errors=errors)
 

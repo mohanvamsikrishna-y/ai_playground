@@ -1,6 +1,7 @@
 "use client";
 
 import { Checkbox } from "@/components/ui/checkbox";
+import { track } from "@/lib/analytics";
 import type { ModelInfo } from "@/lib/types";
 
 interface ModelSelectorProps {
@@ -15,7 +16,14 @@ export default function ModelSelector({
   setSelected,
 }: ModelSelectorProps) {
   const handleToggle = (modelId: string) => {
-    if (selected.includes(modelId)) {
+    const isSelected = selected.includes(modelId);
+    const model = models.find((m) => m.id === modelId);
+    track("model_selected", {
+      model_id: modelId,
+      model_provider: model?.provider,
+      selected: !isSelected,
+    });
+    if (isSelected) {
       setSelected(selected.filter((id) => id !== modelId));
     } else {
       setSelected([...selected, modelId]);

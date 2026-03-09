@@ -5,11 +5,11 @@ from pathlib import Path
 from typing import Optional
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 
 from ..config import AppSettings, get_settings
-from ..dependencies import get_registry
+from ..dependencies import get_registry, require_auth
 
 router = APIRouter(prefix="/config", tags=["config"])
 
@@ -72,7 +72,7 @@ async def get_gemini_config(
 
 
 @router.post("/gemini", response_model=ProviderConfigResponse)
-async def set_gemini_config(payload: GeminiConfigRequest) -> ProviderConfigResponse:
+async def set_gemini_config(payload: GeminiConfigRequest, _user=Depends(require_auth)) -> ProviderConfigResponse:
     """Validate and store the Gemini API key."""
 
     api_key = (payload.api_key or "").strip()
@@ -146,7 +146,7 @@ async def get_deepseek_config(
 
 
 @router.post("/deepseek", response_model=ProviderConfigResponse)
-async def set_deepseek_config(payload: DeepSeekConfigRequest) -> ProviderConfigResponse:
+async def set_deepseek_config(payload: DeepSeekConfigRequest, _user=Depends(require_auth)) -> ProviderConfigResponse:
     """Validate and store the DeepSeek API key."""
 
     api_key = (payload.api_key or "").strip()

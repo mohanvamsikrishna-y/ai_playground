@@ -55,6 +55,30 @@ class AppSettings(BaseSettings):
         description="DeepSeek API key (PLAYGROUND_DEEPSEEK_API_KEY).",
     )
 
+    # OpenAI configuration
+    openai_api_key: Optional[str] = Field(
+        default=None,
+        description="OpenAI API key (PLAYGROUND_OPENAI_API_KEY).",
+    )
+
+    # Claude (Anthropic) configuration
+    claude_api_key: Optional[str] = Field(
+        default=None,
+        description="Claude API key (PLAYGROUND_CLAUDE_API_KEY).",
+    )
+
+    # Google OAuth configuration
+    google_client_id: Optional[str] = Field(
+        default=None,
+        description="Google OAuth client ID for verifying ID tokens (PLAYGROUND_GOOGLE_CLIENT_ID).",
+    )
+
+    # PostHog analytics (optional)
+    posthog_key: Optional[str] = Field(
+        default=None,
+        description="PostHog project API key for server-side analytics (PLAYGROUND_POSTHOG_KEY).",
+    )
+
     # Environment configuration
     env: Optional[str] = Field(
         default=None,
@@ -100,7 +124,17 @@ def get_settings() -> AppSettings:
         key = secrets.get("deepseek_api_key")
         if isinstance(key, str) and key.strip():
             settings.deepseek_api_key = key.strip()
-    
+
+    if not settings.openai_api_key and "openai_api_key" in secrets:
+        key = secrets.get("openai_api_key")
+        if isinstance(key, str) and key.strip():
+            settings.openai_api_key = key.strip()
+
+    if not settings.claude_api_key and "claude_api_key" in secrets:
+        key = secrets.get("claude_api_key")
+        if isinstance(key, str) and key.strip():
+            settings.claude_api_key = key.strip()
+
     return settings
 
 

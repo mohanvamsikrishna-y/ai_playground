@@ -1,0 +1,17 @@
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '--build-arg'
+      - 'NEXT_PUBLIC_API_BASE_URL=${_API_BASE_URL}'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/playground-frontend:latest'
+      - '.'
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - 'gcr.io/$PROJECT_ID/playground-frontend:latest'
+images:
+  - 'gcr.io/$PROJECT_ID/playground-frontend:latest'
+substitutions:
+  _API_BASE_URL: 'https://playground-backend-33tllidsjq-uc.a.run.app'
