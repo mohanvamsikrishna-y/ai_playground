@@ -3,7 +3,7 @@ app/.secrets.json
 __pycache__/
 *.pyc
 *.pyo
-.env
+.env*
 .env.*
 venv/
 .venv/
