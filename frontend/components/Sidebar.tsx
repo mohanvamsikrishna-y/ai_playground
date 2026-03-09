@@ -3,6 +3,8 @@
 import ModelSelector from "@/components/ModelSelector";
 import OllamaDownload from "@/components/OllamaDownload";
 import OpenAISettings from "@/components/OpenAISettings";
+import UserSection from "@/components/UserSection";
+import { API_BASE_URL } from "@/lib/api";
 import type { ModelInfo } from "@/lib/types";
 
 interface SidebarProps {
@@ -81,6 +83,11 @@ export default function Sidebar({
             </button>
           </div>
 
+          {/* User Section */}
+          <div>
+            <UserSection />
+          </div>
+
           {/* Model Selection */}
           <div>
             <ModelSelector
@@ -101,6 +108,17 @@ export default function Sidebar({
           <div>
             <OpenAISettings onValidated={onValidated} />
           </div>
+
+          {/* Debug Info */}
+          {(process.env.NODE_ENV !== 'production' || 
+            process.env.NEXT_PUBLIC_SHOW_DEBUG === '1') && (
+            <div className="pt-4 border-t border-gray-200">
+              <div className="text-xs text-gray-500 space-y-1">
+                <div className="font-medium text-gray-700">Debug Info</div>
+                <div>API Base URL: {API_BASE_URL}</div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </>

@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .config import get_settings
 from .dependencies import get_registry
-from .routers import chat, compare, config, models, ollama
+from .routers import auth, chat, compare, config, models, ollama
 
 
 @asynccontextmanager
@@ -31,6 +31,7 @@ def create_app() -> FastAPI:
     app.include_router(chat.router)
     app.include_router(config.router)
     app.include_router(ollama.router)
+    app.include_router(auth.router)
     return app
 
 

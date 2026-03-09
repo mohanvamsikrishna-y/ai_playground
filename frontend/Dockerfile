@@ -2,6 +2,10 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
+# Accept build args for Next.js public env vars
+ARG NEXT_PUBLIC_API_BASE_URL
+ENV NEXT_PUBLIC_API_BASE_URL=${NEXT_PUBLIC_API_BASE_URL}
+
 # Copy package files and install dependencies
 COPY package*.json ./
 RUN npm ci
@@ -26,4 +30,6 @@ EXPOSE 3000
 
 ENV NODE_ENV=production
 
-CMD ["npm", "start"]
+# Next.js respects PORT env var automatically, but we set it explicitly
+# Cloud Run sets PORT env var, default to 3000 for local development
+CMD sh -c "PORT=${PORT:-3000} npm start"

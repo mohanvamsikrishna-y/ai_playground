@@ -12,4 +12,5 @@ COPY app/ ./app/
 EXPOSE 8000
 
 # Run uvicorn from /app, which will find app.main module
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Cloud Run sets PORT env var, default to 8000 for local development
+CMD uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}

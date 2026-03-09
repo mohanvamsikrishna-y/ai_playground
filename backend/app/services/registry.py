@@ -9,6 +9,8 @@ from .clients.base import BaseModelClient
 from .clients.ollama import OllamaClient
 from .clients.gemini import GeminiClient
 from .clients.deepseek import DeepSeekClient
+from .clients.openai import OpenAIClient
+from .clients.claude import ClaudeClient
 
 logger = logging.getLogger(__name__)
 
@@ -68,32 +70,53 @@ class ModelRegistry:
         self._load_ollama_models(refresh=True)
 
     def _bootstrap_defaults(self) -> None:
-        # Load Ollama models dynamically from API
+        # Load Ollama models dynamically from API (local mode only; prod skips)
         self._load_ollama_models()
 
-        # Gemini models (only register if API key is configured)
-        if self._settings.gemini_api_key:
-            gemini_models = [
-                ("gemini:gemini-2.5-flash", "Gemini 2.5 Flash"),
-            ]
-            for model_id, name in gemini_models:
-                self._clients[model_id] = GeminiClient(
-                    model_id=model_id,
-                    model_name=name,
-                    settings=self._settings,
-                )
+        # Cloud providers: always register; BYOK via headers at request time
+        # Use real Gemini 3 model ids from the public Gemini API.
+        gemini_models = [
+            ("gemini:gemini-3-flash-preview", "Gemini 3 Flash (preview)"),
+            ("gemini:gemini-3-pro-preview", "Gemini 3 Pro (preview)"),
+        ]
+        for model_id, name in gemini_models:
+            self._clients[model_id] = GeminiClient(
+                model_id=model_id,
+                model_name=name,
+                settings=self._settings,
+            )
 
-        # DeepSeek models (only register if API key is configured)
-        if self._settings.deepseek_api_key:
-            deepseek_models = [
-                ("deepseek:chat", "DeepSeek Chat"),
-            ]
-            for model_id, name in deepseek_models:
-                self._clients[model_id] = DeepSeekClient(
-                    model_id=model_id,
-                    model_name=name,
-                    settings=self._settings,
-                )
+        deepseek_models = [
+            ("deepseek:chat", "DeepSeek Chat"),
+        ]
+        for model_id, name in deepseek_models:
+            self._clients[model_id] = DeepSeekClient(
+                model_id=model_id,
+                model_name=name,
+                settings=self._settings,
+            )
+
+        openai_models = [
+            ("openai:gpt-5.2", "GPT-5.2"),
+            ("openai:gpt-5.2-mini", "GPT-5.2 Mini"),
+        ]
+        for model_id, name in openai_models:
+            self._clients[model_id] = OpenAIClient(
+                model_id=model_id,
+                model_name=name,
+                settings=self._settings,
+            )
+
+        claude_models = [
+            ("claude:opus-4.6", "Claude Opus 4.6"),
+            ("claude:sonnet-4.5", "Claude Sonnet 4.5"),
+        ]
+        for model_id, name in claude_models:
+            self._clients[model_id] = ClaudeClient(
+                model_id=model_id,
+                model_name=name,
+                settings=self._settings,
+            )
 
     def list_models(self) -> List[ModelInfo]:
         return [
