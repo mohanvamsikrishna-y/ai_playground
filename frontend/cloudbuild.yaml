@@ -14,4 +14,4 @@ steps:
 images:
   - 'gcr.io/$PROJECT_ID/playground-frontend:latest'
 substitutions:
-  _API_BASE_URL: 'https://playground-backend-468080506202.us-central1.run.app'
+  _API_BASE_URL: 'https://playground-backend-33tllidsjq-uc.a.run.app'
