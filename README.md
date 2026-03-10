@@ -39,6 +39,69 @@ This project supports two deployment modes using the same codebase:
   - Download from [ollama.ai](https://ollama.ai)
   - Or use `docker-compose.ollama.yml` on Linux
 
+### One-Block Setup (per OS)
+
+You (or a recruiter) can copy-paste **one block** below depending on their OS.  
+These install the basics (Git, Docker, Ollama where possible), clone the repo, and start the app.
+
+#### macOS (with Homebrew)
+
+```bash
+# Install Homebrew if not installed
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+
+# Install core tools
+brew install git
+brew install --cask docker
+brew install --cask ollama
+
+# Start Docker Desktop and Ollama (may require manual first launch/permissions)
+
+# Clone and run the playground
+git clone https://github.com/mohanvamsikrishna-y/ai_playground.git
+cd ai_playground
+cp .env.example .env
+docker compose up --build
+```
+
+#### Windows 11 (PowerShell + Winget)
+
+Run this in **PowerShell as Administrator**:
+
+```powershell
+# Install core tools (may prompt you through installers)
+winget install -e --id Git.Git
+winget install -e --id Docker.DockerDesktop
+winget install -e --id Ollama.Ollama
+
+# You may need to log out/in or restart after Docker Desktop installs.
+
+# Clone and run the playground
+git clone https://github.com/mohanvamsikrishna-y/ai_playground.git
+cd ai_playground
+copy .env.example .env
+docker compose up --build
+```
+
+#### Linux (Ubuntu/Debian-like)
+
+```bash
+sudo apt update
+sudo apt install -y git docker.io docker-compose-plugin
+
+# Optional: install Ollama for local models
+curl -fsSL https://ollama.com/install.sh | sh
+
+# Make sure your user can run Docker without sudo (may require re-login)
+sudo usermod -aG docker "$USER"
+
+# Clone and run the playground
+git clone https://github.com/mohanvamsikrishna-y/ai_playground.git
+cd ai_playground
+cp .env.example .env
+docker compose up --build
+```
+
 ### Setup Steps
 
 1. **Clone the repository**
