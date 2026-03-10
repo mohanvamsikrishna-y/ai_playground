@@ -1,5 +1,7 @@
 # AI Model Comparison Playground
 
+## DEMO LINK: https://playground-frontend-33tllidsjq-uc.a.run.app/
+
 A modern chat interface for comparing multiple AI models side-by-side. Supports local Ollama models and cloud providers (Gemini, DeepSeek) with Bring-Your-Own-Key (BYOK) authentication.
 
 ## Features
