@@ -39,11 +39,6 @@ This project supports two deployment modes using the same codebase:
   - Download from [ollama.ai](https://ollama.ai)
   - Or use `docker-compose.ollama.yml` on Linux
 
-### One-Block Setup (per OS)
-
-You (or a recruiter) can copy-paste **one block** below depending on their OS.  
-These install the basics (Git, Docker, Ollama where possible), clone the repo, and start the app.
-
 #### macOS (with Homebrew)
 
 ```bash
