@@ -386,6 +386,3 @@ ai_playground/
 - Check browser console for API errors
 - Ensure keys are valid and have proper permissions
 
-## License
-
-[Add your license here]
